@@ -5,8 +5,7 @@ import { prisma } from "@/lib/db";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { markdownToHtml } from "@/lib/markdownToHtml"; // ✅ fixed import
-
+import { markdownToHtml } from "@/lib/markdownToHtml";
 
 type Props = {
   params: Promise<{
@@ -15,6 +14,7 @@ type Props = {
 };
 
 const CoursePage = async ({ params }: Props) => {
+  // ✅ Required in Next.js 15
   const { slug } = await params;
   const [courseId, unitIndexParam, chapterIndexParam] = slug;
 
@@ -33,8 +33,8 @@ const CoursePage = async ({ params }: Props) => {
 
   if (!course) redirect("/gallery");
 
-  const unitIndex = parseInt(unitIndexParam, 10);
-  const chapterIndex = parseInt(chapterIndexParam, 10);
+  const unitIndex = Number(unitIndexParam);
+  const chapterIndex = Number(chapterIndexParam);
 
   const unit = course.units[unitIndex];
   if (!unit) redirect("/gallery");
@@ -45,7 +45,7 @@ const CoursePage = async ({ params }: Props) => {
   const prevChapter = unit.chapters[chapterIndex - 1];
   const nextChapter = unit.chapters[chapterIndex + 1];
 
-  // ✅ Correct field names from Prisma schema
+  // ✅ Markdown conversion (safe if empty)
   const contentHtml = chapter.contentMarkdown
     ? await markdownToHtml(chapter.contentMarkdown)
     : "";
@@ -64,8 +64,8 @@ const CoursePage = async ({ params }: Props) => {
 
       {/* MAIN CONTENT */}
       <main className="flex-1 ml-[320px] px-10 py-8 max-w-4xl">
-        {/* VIDEO + CONTENT + SUMMARY */}
-        <MainVideoSummary 
+        
+        <MainVideoSummary
           chapter={chapter}
           contentHtml={contentHtml}
           summaryHtml={summaryHtml}
@@ -86,7 +86,9 @@ const CoursePage = async ({ params }: Props) => {
               <ChevronLeft />
               <span>{prevChapter.name}</span>
             </Link>
-          ) : <div />}
+          ) : (
+            <div />
+          )}
 
           {nextChapter && (
             <Link
