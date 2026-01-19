@@ -8,14 +8,14 @@ import { redirect } from "next/navigation";
 import { markdownToHtml } from "@/lib/markdownToHtml";
 
 type Props = {
-  params: Promise<{
+  params: {
     slug: string[];
-  }>;
+  };
 };
 
 const CoursePage = async ({ params }: Props) => {
-  // ✅ Required in Next.js 15
-  const { slug } = await params;
+  // ✅ Await works but typing matches Next.js PageProps
+  const { slug } = await Promise.resolve(params);
   const [courseId, unitIndexParam, chapterIndexParam] = slug;
 
   const course = await prisma.course.findUnique({
@@ -45,7 +45,6 @@ const CoursePage = async ({ params }: Props) => {
   const prevChapter = unit.chapters[chapterIndex - 1];
   const nextChapter = unit.chapters[chapterIndex + 1];
 
-  // ✅ Markdown conversion (safe if empty)
   const contentHtml = chapter.contentMarkdown
     ? await markdownToHtml(chapter.contentMarkdown)
     : "";
@@ -56,27 +55,19 @@ const CoursePage = async ({ params }: Props) => {
 
   return (
     <div className="flex">
-      {/* SIDEBAR */}
-      <CourseSideBar
-        course={course}
-        currentChapterId={chapter.id}
-      />
+      <CourseSideBar course={course} currentChapterId={chapter.id} />
 
-      {/* MAIN CONTENT */}
       <main className="flex-1 ml-[320px] px-10 py-8 max-w-4xl">
-        
         <MainVideoSummary
           chapter={chapter}
           contentHtml={contentHtml}
           summaryHtml={summaryHtml}
         />
 
-        {/* QUIZ */}
         <div className="mt-12">
           <QuizCards chapter={chapter} />
         </div>
 
-        {/* NAVIGATION */}
         <div className="flex justify-between mt-12 pt-6 border-t">
           {prevChapter ? (
             <Link
