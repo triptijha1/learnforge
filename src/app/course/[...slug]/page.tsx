@@ -9,13 +9,14 @@ import { markdownToHtml } from "@/lib/markdownToHtml"; // ✅ fixed import
 
 
 type Props = {
-  params: {
+  params: Promise<{
     slug: string[];
-  };
+  }>;
 };
 
 const CoursePage = async ({ params }: Props) => {
-  const [courseId, unitIndexParam, chapterIndexParam] = params.slug;
+  const { slug } = await params;
+  const [courseId, unitIndexParam, chapterIndexParam] = slug;
 
   const course = await prisma.course.findUnique({
     where: { id: courseId },
