@@ -7,10 +7,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { markdownToHtml } from "@/lib/markdownToHtml";
 
-
-const CoursePage = async ({ params }: any) => {
-  // ✅ Await works but typing matches Next.js PageProps
-    const { slug } = await params;
+const CoursePage = async (props: any) => {
+  // ✅ Next.js 15 passes params as a Promise internally
+  const { slug } = await props.params;
   const [courseId, unitIndexParam, chapterIndexParam] = slug;
 
   const course = await prisma.course.findUnique({
