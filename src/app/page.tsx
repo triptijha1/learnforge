@@ -1,103 +1,121 @@
-import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight, Sparkles, Brain, Clock } from "lucide-react";
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="w-full">
+      {/* ================= HERO ================= */}
+      <section className="py-32 text-center bg-background">
+        <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight">
+          Build Courses with <span className="text-primary">AI</span>
+        </h1>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
+          Automatically generate chapters, summaries, videos, and quizzes.
+          Learn faster. Teach smarter.
+        </p>
+
+        <div className="mt-10 flex justify-center gap-4">
+          <Link
+            href="/create"
+            className="px-8 py-4 rounded-xl bg-primary text-primary-foreground font-semibold inline-flex items-center gap-2 hover:opacity-90 transition"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            Create a Course <ArrowRight className="w-4 h-4" />
+          </Link>
+
+          <Link
+            href="/explore"
+            className="px-8 py-4 rounded-xl border font-semibold hover:bg-muted transition"
           >
-            Read our docs
-          </a>
+            Explore Courses
+          </Link>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+      </section>
+
+      {/* ================= STATS ================= */}
+      <section className="py-20 bg-muted/40">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-10 text-center">
+          <div>
+            <h3 className="text-4xl font-bold">10×</h3>
+            <p className="text-muted-foreground mt-2">
+              Faster course creation
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-4xl font-bold">AI-Powered</h3>
+            <p className="text-muted-foreground mt-2">
+              Smart learning engine
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-4xl font-bold">24/7</h3>
+            <p className="text-muted-foreground mt-2">
+              Learn anytime, anywhere
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ================= FEATURES ================= */}
+      <section className="py-28 bg-background">
+        <div className="max-w-6xl mx-auto text-center">
+          <h2 className="text-4xl font-bold">
+            Everything You Need to Learn Smarter
+          </h2>
+
+          <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="p-8 rounded-2xl border bg-card hover:shadow-lg transition">
+              <Sparkles className="w-8 h-8 text-primary mb-4 mx-auto" />
+              <h3 className="font-semibold text-lg">
+                AI-Generated Content
+              </h3>
+              <p className="text-muted-foreground mt-2">
+                Chapters, explanations and summaries generated instantly.
+              </p>
+            </div>
+
+            <div className="p-8 rounded-2xl border bg-card hover:shadow-lg transition">
+              <Brain className="w-8 h-8 text-primary mb-4 mx-auto" />
+              <h3 className="font-semibold text-lg">
+                Structured Courses
+              </h3>
+              <p className="text-muted-foreground mt-2">
+                Units and chapters designed for effective learning.
+              </p>
+            </div>
+
+            <div className="p-8 rounded-2xl border bg-card hover:shadow-lg transition">
+              <Clock className="w-8 h-8 text-primary mb-4 mx-auto" />
+              <h3 className="font-semibold text-lg">
+                Interactive Quizzes
+              </h3>
+              <p className="text-muted-foreground mt-2">
+                Auto-generated MCQs to test understanding.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ================= CTA ================= */}
+      <section className="py-24 bg-muted/40 text-center">
+        <h2 className="text-4xl font-bold">
+          Start Learning the Smart Way
+        </h2>
+
+        <p className="mt-4 text-muted-foreground">
+          Build your first AI-powered course in minutes.
+        </p>
+
+        <Link
+          href="/create"
+          className="inline-block mt-8 px-10 py-4 rounded-xl bg-primary text-primary-foreground font-semibold hover:opacity-90 transition"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+          Create Your Course
+        </Link>
+      </section>
+    </main>
   );
 }
