@@ -1,6 +1,7 @@
 import { DefaultSession, NextAuthOptions } from "next-auth";
 import { getServerSession } from "next-auth/next";
 import GoogleProvider from "next-auth/providers/google";
+import { createClient } from "@supabase/supabase-js";
 
 /* -------------------- TYPES -------------------- */
 
@@ -61,3 +62,25 @@ export const authOptions: NextAuthOptions = {
 export const getAuthSession = () => {
   return getServerSession(authOptions);
 };
+
+// ---------------------------------------------
+// OPTIONAL helper: fetch user credits on demand
+// ---------------------------------------------
+export async function getUserCredits(userId: string) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY! // server-only
+  );
+
+  const { data, error } = await supabase
+    .from("User")
+    .select("credits")
+    .eq("id", userId)
+    .single();
+
+  if (error || !data) {
+    return 0; // safe fallback
+  }
+
+  return data.credits;
+}

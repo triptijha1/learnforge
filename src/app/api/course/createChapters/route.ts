@@ -3,9 +3,8 @@ import { ZodError } from "zod";
 import { createChapterSchema } from "@/validators/course";
 import { getUnsplashImage } from "@/lib/unsplash";
 import { prisma } from "@/lib/db";
-import { getAuthSession } from "@/lib/auth";
+import { getAuthSession, getUserCredits } from "@/lib/auth";
 import { generateText } from "@/lib/ai";
-import { supabase } from "@/lib/supabase";
 
 /* -------------------- TYPES -------------------- */
 
@@ -72,9 +71,7 @@ Rules:
     }
 
     return parsed as OutputUnits;
-  } catch (err) {
-    console.error("AI JSON repair failed:", raw);
-
+  } catch {
     // 3️⃣ Absolute fallback
     return units.map((u) => ({
       title: u,
@@ -111,20 +108,11 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { title, units } = createChapterSchema.parse(body);
 
-    // 3️⃣ Ensure user exists
-    const { data: user, error } = await supabase
-  .from("User")
-  .select("*")
-  .eq("id", session.user.id)
-  .single();
+    // 3️⃣ Credit check (Supabase, safe)
+    const credits = await getUserCredits(session.user.id);
 
-if (error || !user) {
-  return new NextResponse("user not found", { status: 404 });
-}
-
-
-    if (!user) {
-      return new NextResponse("user not found", { status: 404 });
+    if (credits <= 0) {
+      return new NextResponse("no credits", { status: 402 });
     }
 
     // 4️⃣ AI: Generate units + chapters
@@ -135,12 +123,12 @@ if (error || !user) {
     const courseImage =
       (await getUnsplashImage(imageSearchTerm)) ?? "";
 
-    // 6️⃣ ATOMIC TRANSACTION
+    // 6️⃣ ATOMIC TRANSACTION (Prisma)
     const course = await prisma.$transaction(async (tx) => {
-      // Credit check + decrement
+      // Decrement credits
       const updatedUser = await tx.user.updateMany({
         where: {
-          id: user.id,
+          id: session.user.id,
           credits: { gt: 0 },
         },
         data: {
@@ -157,7 +145,7 @@ if (error || !user) {
         data: {
           name: title,
           image: courseImage,
-          userId: user.id,
+          userId: session.user.id,
         },
       });
 

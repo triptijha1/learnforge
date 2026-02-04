@@ -3,7 +3,6 @@ import { searchYoutube } from "@/lib/youtube";
 import { getAuthSession } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-
 import { generateText } from "@/lib/ai";
 import {
   chapterContentPrompt,
@@ -12,12 +11,14 @@ import {
 } from "@/lib/prompts";
 
 /* -------------------- INPUT SCHEMA -------------------- */
+
 const bodySchema = z.object({
   chapterId: z.string(),
   language: z.enum(["EN", "HI"]).default("EN"),
 });
 
 /* -------------------- MCQ TYPE -------------------- */
+
 type MCQ = {
   question: string;
   options: string[];
@@ -26,6 +27,7 @@ type MCQ = {
 };
 
 /* -------------------- ROUTE -------------------- */
+
 export async function POST(req: Request) {
   try {
     /* -------------------- AUTH -------------------- */
@@ -48,6 +50,9 @@ export async function POST(req: Request) {
           },
         },
       },
+      include: {
+        questions: true,
+      },
     });
 
     if (!chapter) {
@@ -57,71 +62,75 @@ export async function POST(req: Request) {
       );
     }
 
-    /* -------------------- CACHE CHECK -------------------- */
-    if (chapter.contentMarkdown && chapter.summaryMarkdown) {
-      return NextResponse.json({ success: true, cached: true });
+    let contentMarkdown = chapter.contentMarkdown;
+    let summaryMarkdown = chapter.summaryMarkdown;
+    let youtubeVideoId = chapter.youtubeVideoId;
+    let needsUpdate = false;
+
+    /* -------------------- YOUTUBE VIDEO (ONLY IF MISSING) -------------------- */
+    if (!youtubeVideoId) {
+      try {
+        youtubeVideoId = await searchYoutube(
+          `${chapter.name} ${language === "HI" ? "Hindi" : "English"}`
+        );
+        needsUpdate = true;
+      } catch (err) {
+        console.error("YouTube search failed:", err);
+      }
     }
 
-    /* -------------------- YOUTUBE VIDEO -------------------- */
-    let videoId: string | null = null;
-
-    try {
-      videoId = await searchYoutube(
-        `${chapter.name} ${language === "HI" ? "Hindi" : "English"}`
+    /* -------------------- CONTENT (ONLY IF MISSING) -------------------- */
+    if (!contentMarkdown || contentMarkdown.trim().length === 0) {
+      contentMarkdown = await generateText(
+        chapterContentPrompt(chapter.name)
       );
-    } catch (err) {
-      console.error("YouTube search failed:", err);
+      needsUpdate = true;
     }
 
-    /* -------------------- AI GENERATION (GEMINI) -------------------- */
-
-    // 1️⃣ Chapter content
-    const contentMarkdown = await generateText(
-      chapterContentPrompt(chapter.name)
-    );
-
-    // 2️⃣ Summary
-    const summaryMarkdown = await generateText(
-      summaryPrompt(contentMarkdown)
-    );
-
-    // 3️⃣ Quiz
-    let mcqs: MCQ[] = [];
-    try {
-      const quizRaw = await generateText(
-        quizPrompt(chapter.name)
+    /* -------------------- SUMMARY (ONLY IF MISSING) -------------------- */
+    if (!summaryMarkdown || summaryMarkdown.trim().length === 0) {
+      summaryMarkdown = await generateText(
+        summaryPrompt(contentMarkdown ?? "")
       );
-      mcqs = JSON.parse(quizRaw);
-    } catch (err) {
-      console.error("Failed to parse MCQs JSON");
+      needsUpdate = true;
     }
 
-    /* -------------------- SAVE QUESTIONS -------------------- */
-    if (mcqs.length > 0) {
-      await prisma.question.deleteMany({
-        where: { chapterId },
-      });
+    /* -------------------- QUIZ (ONLY IF MISSING) -------------------- */
+    if (chapter.questions.length === 0) {
+      try {
+        const quizRaw = await generateText(
+          quizPrompt(chapter.name)
+        );
 
-      await prisma.question.createMany({
-        data: mcqs.map((q) => ({
-          chapterId,
-          question: q.question,
-          answer: q.answer,
-          options: JSON.stringify(q.options),
-        })),
-      });
+        const mcqs: MCQ[] = JSON.parse(quizRaw);
+
+        if (Array.isArray(mcqs) && mcqs.length > 0) {
+          await prisma.question.createMany({
+            data: mcqs.map((q) => ({
+              chapterId,
+              question: q.question,
+              answer: q.answer,
+              options: JSON.stringify(q.options),
+            })),
+          });
+        }
+      } catch (err) {
+        console.error("Failed to generate or parse MCQs");
+      }
     }
 
-    /* -------------------- UPDATE CHAPTER -------------------- */
-    await prisma.chapter.update({
-      where: { id: chapterId },
-      data: {
-        youtubeVideoId: videoId,
-        videoLanguage: language,
-        contentMarkdown,
-        summaryMarkdown,
-      },
-    });
+    /* -------------------- UPDATE CHAPTER (ONLY IF NEEDED) -------------------- */
+    if (needsUpdate) {
+      await prisma.chapter.update({
+        where: { id: chapterId },
+        data: {
+          youtubeVideoId,
+          videoLanguage: language,
+          contentMarkdown,
+          summaryMarkdown,
+        },
+      });
+    }
 
     return NextResponse.json({ success: true });
 

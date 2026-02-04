@@ -5,9 +5,13 @@ import { getAuthSession } from "@/lib/auth";
 import { generateText } from "@/lib/ai";
 import { chapterContentPrompt, summaryPrompt } from "@/lib/prompts";
 
+/* -------------------- INPUT SCHEMA -------------------- */
+
 const bodySchema = z.object({
   chapterId: z.string(),
 });
+
+/* -------------------- ROUTE -------------------- */
 
 export async function POST(req: Request) {
   try {
@@ -42,21 +46,26 @@ export async function POST(req: Request) {
 
     let contentMarkdown = chapter.contentMarkdown;
     let summaryMarkdown = chapter.summaryMarkdown;
-    
-    // 4️⃣ Generate content with Gemini (ONLY if missing)
+    let needsUpdate = false;
+
+    // 4️⃣ Generate content (ONLY if missing)
     if (!contentMarkdown || contentMarkdown.trim().length === 0) {
       contentMarkdown = await generateText(
         chapterContentPrompt(chapter.name)
       );
+      needsUpdate = true;
+    }
 
-      // 5️⃣ Generate summary with Gemini (ONLY if missing)
-      if (!summaryMarkdown || summaryMarkdown.trim().length === 0) {
-        summaryMarkdown = await generateText(
-          summaryPrompt(contentMarkdown)
-        );
-      }
+    // 5️⃣ Generate summary (ONLY if missing)
+    if (!summaryMarkdown || summaryMarkdown.trim().length === 0) {
+      summaryMarkdown = await generateText(
+        summaryPrompt(contentMarkdown ?? "")
+      );
+      needsUpdate = true;
+    }
 
-      // 5️⃣ Save generated content to DB
+    // 6️⃣ Save generated fields (ONLY if needed)
+    if (needsUpdate) {
       await prisma.chapter.update({
         where: { id: chapter.id },
         data: {
@@ -66,7 +75,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // 6️⃣ Return chapter with content
+    // 7️⃣ Return chapter with updated content
     return NextResponse.json({
       ...chapter,
       contentMarkdown,
@@ -74,7 +83,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
-    console.error("GET CHAPTER ERROR:", error);
+    console.error("[GET_CHAPTER_ERROR]", error);
 
     return NextResponse.json(
       { error: "Invalid request" },

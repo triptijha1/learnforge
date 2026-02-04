@@ -6,14 +6,29 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { markdownToHtml } from "@/lib/markdownToHtml";
+import { getAuthSession } from "@/lib/auth";
 
-const CoursePage = async (props: any) => {
-  // ✅ Next.js 15 passes params as a Promise internally
-  const { slug } = await props.params;
-  const [courseId, unitIndexParam, chapterIndexParam] = slug;
+type Props = {
+  params: {
+    slug: string[];
+  };
+};
 
-  const course = await prisma.course.findUnique({
-    where: { id: courseId },
+const CoursePage = async ({ params }: Props) => {
+  // ✅ params is NOT a Promise
+  const [courseId, unitIndexParam, chapterIndexParam] = params.slug;
+
+  // 🔐 Auth protection
+  const session = await getAuthSession();
+  if (!session?.user?.id) {
+    redirect("/gallery");
+  }
+
+  const course = await prisma.course.findFirst({
+    where: {
+      id: courseId,
+      userId: session.user.id, // 🔒 ownership enforced
+    },
     include: {
       units: {
         include: {
