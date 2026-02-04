@@ -5,19 +5,21 @@ import { Info } from "lucide-react";
 import { redirect } from "next/navigation";
 
 type Props = {
-  params: Promise<{
+  params: {
     courseId: string;
-  }>;
+  };
 };
 
 const CreateChapters = async ({ params }: Props) => {
-  const { courseId } = await params; // ✅ Next.js 15 requires await params
+  const { courseId } = params; // ✅ no await
 
+  // 🔐 Auth
   const session = await getAuthSession();
   if (!session?.user?.id) {
     redirect("/gallery");
   }
 
+  // 📦 Fetch course
   const course = await prisma.course.findUnique({
     where: { id: courseId },
     include: {

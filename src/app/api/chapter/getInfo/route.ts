@@ -4,7 +4,12 @@ import { getAuthSession } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { generateWithOllama } from "@/lib/ollama";
+import { generateText } from "@/lib/ai";
+import {
+  chapterContentPrompt,
+  summaryPrompt,
+  quizPrompt,
+} from "@/lib/prompts";
 
 /* -------------------- INPUT SCHEMA -------------------- */
 const bodySchema = z.object({
@@ -17,57 +22,10 @@ type MCQ = {
   question: string;
   options: string[];
   answer: string;
+  explanation?: string;
 };
 
-/* -------------------- PROMPT HELPERS -------------------- */
-
-async function generateContent(topic: string) {
-  const prompt = `
-You are an expert course instructor.
-Write a detailed markdown-formatted chapter on the topic: "${topic}".
-Include explanations, examples, and structured headings.
-Do not include quizzes or summaries.
-`;
-  return await generateWithOllama(prompt);
-}
-
-async function generateSummary(topic: string) {
-  const prompt = `
-Create short markdown revision notes summarizing the chapter on "${topic}".
-Keep it concise and clear.
-`;
-  return await generateWithOllama(prompt);
-}
-
-async function generateMCQs(topic: string): Promise<MCQ[]> {
-  const prompt = `
-Generate 5 multiple choice questions on "${topic}".
-Return ONLY valid JSON in this format:
-
-[
-  {
-    "question": "Question text",
-    "options": ["A", "B", "C", "D"],
-    "answer": "Correct option text"
-  }
-]
-
-Do not include any extra text outside JSON.
-`;
-
-  const raw = await generateWithOllama(prompt);
-
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed as MCQ[];
-  } catch (err) {
-    console.error("Failed to parse MCQs JSON:", raw);
-    return [];
-  }
-}
-
 /* -------------------- ROUTE -------------------- */
-
 export async function POST(req: Request) {
   try {
     /* -------------------- AUTH -------------------- */
@@ -93,7 +51,10 @@ export async function POST(req: Request) {
     });
 
     if (!chapter) {
-      return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Chapter not found" },
+        { status: 404 }
+      );
     }
 
     /* -------------------- CACHE CHECK -------------------- */
@@ -102,23 +63,38 @@ export async function POST(req: Request) {
     }
 
     /* -------------------- YOUTUBE VIDEO -------------------- */
-    /* -------------------- YOUTUBE VIDEO -------------------- */
-let videoId: string | null = null;
+    let videoId: string | null = null;
 
-try {
-  videoId = await searchYoutube(
-    `${chapter.name} ${language === "HI" ? "Hindi" : "English"}`
-  );
-} catch (err) {
-  console.error("YouTube search failed:", err);
-}
+    try {
+      videoId = await searchYoutube(
+        `${chapter.name} ${language === "HI" ? "Hindi" : "English"}`
+      );
+    } catch (err) {
+      console.error("YouTube search failed:", err);
+    }
 
+    /* -------------------- AI GENERATION (GEMINI) -------------------- */
 
+    // 1️⃣ Chapter content
+    const contentMarkdown = await generateText(
+      chapterContentPrompt(chapter.name)
+    );
 
-    /* -------------------- AI GENERATION (OLLAMA) -------------------- */
-    const contentMarkdown = await generateContent(chapter.name);
-    const summaryMarkdown = await generateSummary(chapter.name);
-    const mcqs: MCQ[] = await generateMCQs(chapter.name);
+    // 2️⃣ Summary
+    const summaryMarkdown = await generateText(
+      summaryPrompt(contentMarkdown)
+    );
+
+    // 3️⃣ Quiz
+    let mcqs: MCQ[] = [];
+    try {
+      const quizRaw = await generateText(
+        quizPrompt(chapter.name)
+      );
+      mcqs = JSON.parse(quizRaw);
+    } catch (err) {
+      console.error("Failed to parse MCQs JSON");
+    }
 
     /* -------------------- SAVE QUESTIONS -------------------- */
     if (mcqs.length > 0) {
@@ -148,6 +124,7 @@ try {
     });
 
     return NextResponse.json({ success: true });
+
   } catch (error) {
     console.error("[CHAPTER_GET_INFO_ERROR]", error);
     return NextResponse.json(

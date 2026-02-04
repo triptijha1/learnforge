@@ -4,7 +4,8 @@ import { createChapterSchema } from "@/validators/course";
 import { getUnsplashImage } from "@/lib/unsplash";
 import { prisma } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
-import { generateWithOllama } from "@/lib/ollama";
+import { generateText } from "@/lib/ai";
+import { supabase } from "@/lib/supabase";
 
 /* -------------------- TYPES -------------------- */
 
@@ -16,9 +17,12 @@ type OutputUnits = {
   }[];
 }[];
 
-/* -------------------- OLLAMA HELPERS -------------------- */
+/* -------------------- AI HELPERS (GEMINI) -------------------- */
 
-async function generateUnits(title: string, units: string[]): Promise<OutputUnits> {
+async function generateUnits(
+  title: string,
+  units: string[]
+): Promise<OutputUnits> {
   const prompt = `
 Return ONLY valid JSON. No text outside JSON.
 
@@ -42,26 +46,26 @@ Rules:
 - If unsure about youtube query, still return a short reasonable phrase
 `;
 
-  const raw = await generateWithOllama(prompt);
+  const raw = await generateText(prompt);
 
-  // Try normal parse
+  // 1️⃣ Normal parse
   try {
     return JSON.parse(raw) as OutputUnits;
   } catch {}
 
-  // Fallback repair mode
+  // 2️⃣ Repair mode
   try {
-    // Extract JSON array even if model added text
     const match = raw.match(/\[[\s\S]*\]/);
     if (!match) throw new Error("No JSON array");
 
     const parsed = JSON.parse(match[0]);
 
-    // 🔒 Guarantee every chapter has a youtube_search_query
     for (const unit of parsed) {
       for (const chapter of unit.chapters) {
-        if (!chapter.youtube_search_query || typeof chapter.youtube_search_query !== "string") {
-          // fallback safe query using chapter title
+        if (
+          !chapter.youtube_search_query ||
+          typeof chapter.youtube_search_query !== "string"
+        ) {
           chapter.youtube_search_query = chapter.chapter_title;
         }
       }
@@ -71,7 +75,7 @@ Rules:
   } catch (err) {
     console.error("AI JSON repair failed:", raw);
 
-    // 🔒 Absolute fallback: build structure from units input
+    // 3️⃣ Absolute fallback
     return units.map((u) => ({
       title: u,
       chapters: [
@@ -84,13 +88,12 @@ Rules:
   }
 }
 
-
 async function generateImageSearchTerm(title: string): Promise<string> {
   const prompt = `
 Give one short Unsplash search term for a course titled "${title}".
 Return ONLY the search term text. No extra words.
 `;
-  const raw = await generateWithOllama(prompt);
+  const raw = await generateText(prompt);
   return raw.trim();
 }
 
@@ -109,20 +112,26 @@ export async function POST(req: Request) {
     const { title, units } = createChapterSchema.parse(body);
 
     // 3️⃣ Ensure user exists
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-    });
+    const { data: user, error } = await supabase
+  .from("User")
+  .select("*")
+  .eq("id", session.user.id)
+  .single();
+
+if (error || !user) {
+  return new NextResponse("user not found", { status: 404 });
+}
+
 
     if (!user) {
       return new NextResponse("user not found", { status: 404 });
     }
 
-    // 4️⃣ AI: Generate units + chapters using Ollama
+    // 4️⃣ AI: Generate units + chapters
     const output_units = await generateUnits(title, units);
 
     // 5️⃣ AI: Generate Unsplash search term
     const imageSearchTerm = await generateImageSearchTerm(title);
-
     const courseImage =
       (await getUnsplashImage(imageSearchTerm)) ?? "";
 
@@ -183,10 +192,6 @@ export async function POST(req: Request) {
 
     if (error instanceof Error && error.message === "NO_CREDITS") {
       return new NextResponse("no credits", { status: 402 });
-    }
-
-    if (error instanceof Error && error.message === "INVALID_AI_OUTPUT") {
-      return new NextResponse("ai output parse error", { status: 500 });
     }
 
     console.error("[CREATE_CHAPTERS_ERROR]", error);

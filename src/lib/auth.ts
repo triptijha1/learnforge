@@ -1,8 +1,8 @@
 import { DefaultSession, NextAuthOptions } from "next-auth";
-import { prisma } from "./db";
 import { getServerSession } from "next-auth/next";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import GoogleProvider from "next-auth/providers/google";
+
+/* -------------------- TYPES -------------------- */
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
@@ -20,12 +20,12 @@ declare module "next-auth/jwt" {
   }
 }
 
+/* -------------------- AUTH OPTIONS -------------------- */
+
 export const authOptions: NextAuthOptions = {
   session: {
-    strategy: "jwt",
+    strategy: "jwt", // ✅ no database
   },
-
-  adapter: PrismaAdapter(prisma),
 
   providers: [
     GoogleProvider({
@@ -35,30 +35,19 @@ export const authOptions: NextAuthOptions = {
   ],
 
   callbacks: {
-    jwt: async ({ token }) => {
-      // Fetch user only once
-      if (!token.id && token.email) {
-        const db_user = await prisma.user.findUnique({
-          where: {
-            email: token.email,
-          },
-        });
-
-        if (db_user) {
-          token.id = db_user.id;
-          token.credits = db_user.credits;
-        }
+    async jwt({ token, account, profile }) {
+      // Runs on first login
+      if (account && profile) {
+        token.id = profile.sub as string; // Google user id
+        token.credits = 0; // default (can be fetched later)
       }
       return token;
     },
 
-    session: ({ session, token }) => {
-      if (token && session.user) {
+    async session({ session, token }) {
+      if (session.user && token) {
         session.user.id = token.id as string;
-        session.user.name = token.name;
-        session.user.email = token.email;
-        session.user.image = token.picture as string;
-        session.user.credits = token.credits as number;
+        session.user.credits = token.credits ?? 0;
       }
       return session;
     },
@@ -66,6 +55,8 @@ export const authOptions: NextAuthOptions = {
 
   secret: process.env.NEXTAUTH_SECRET as string,
 };
+
+/* -------------------- SERVER SESSION -------------------- */
 
 export const getAuthSession = () => {
   return getServerSession(authOptions);
