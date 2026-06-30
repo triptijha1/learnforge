@@ -21,11 +21,20 @@ declare module "next-auth/jwt" {
   }
 }
 
+/* -------------------- SUPABASE SERVER CLIENT -------------------- */
+
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY! // server-only
+  );
+}
+
 /* -------------------- AUTH OPTIONS -------------------- */
 
 export const authOptions: NextAuthOptions = {
   session: {
-    strategy: "jwt", // ✅ no database
+    strategy: "jwt",
   },
 
   providers: [
@@ -37,11 +46,38 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async jwt({ token, account, profile }) {
-      // Runs on first login
+      // Run only on sign-in
       if (account && profile) {
-        token.id = profile.sub as string; // Google user id
-        token.credits = 0; // default (can be fetched later)
+        const supabase = getSupabaseAdmin();
+        const userId = profile.sub as string;
+
+        token.id = userId;
+
+        // Fetch credits
+        const { data, error } = await supabase
+          .from("User")
+          .select("credits")
+          .eq("id", userId)
+          .single();
+
+        // If user exists and has 0 credits → give starter credits
+        if (!error && data) {
+          if (data.credits === 0) {
+            await supabase
+              .from("User")
+              .update({ credits: 10 })
+              .eq("id", userId);
+
+            token.credits = 10;
+          } else {
+            token.credits = data.credits;
+          }
+        } else {
+          // Safe fallback
+          token.credits = 0;
+        }
       }
+
       return token;
     },
 
@@ -63,14 +99,10 @@ export const getAuthSession = () => {
   return getServerSession(authOptions);
 };
 
-// ---------------------------------------------
-// OPTIONAL helper: fetch user credits on demand
-// ---------------------------------------------
+/* -------------------- CREDIT HELPER -------------------- */
+
 export async function getUserCredits(userId: string) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY! // server-only
-  );
+  const supabase = getSupabaseAdmin();
 
   const { data, error } = await supabase
     .from("User")
@@ -78,9 +110,7 @@ export async function getUserCredits(userId: string) {
     .eq("id", userId)
     .single();
 
-  if (error || !data) {
-    return 0; // safe fallback
-  }
+  if (error || !data) return 0;
 
   return data.credits;
 }

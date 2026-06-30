@@ -22,18 +22,6 @@ const CreateCourseForm = () => {
   const router = useRouter();
   const { toast } = useToast();
 
-  const createMutation = useMutation({
-    mutationFn: async ({ title, units }: FormInput) => {
-      const response = await axios.post("/api/course/createChapters", {
-        title,
-        units,
-      });
-      return response.data;
-    },
-  });
-
-  const { mutate: createChapters, isPending: isLoading } = createMutation;
-
   const form = useForm<FormInput>({
     resolver: zodResolver(createChapterSchema),
     defaultValues: {
@@ -42,7 +30,19 @@ const CreateCourseForm = () => {
     },
   });
 
-  function onSubmit(data: FormInput) {
+  const createMutation = useMutation({
+    mutationFn: async (data: FormInput) => {
+      const response = await axios.post(
+        "/api/course/createChapters",
+        data
+      );
+      return response.data; // should return full course object
+    },
+  });
+
+  const { mutate, isPending } = createMutation;
+
+  const onSubmit = (data: FormInput) => {
     if (data.units.some((unit) => unit.trim() === "")) {
       toast({
         title: "Error",
@@ -52,13 +52,26 @@ const CreateCourseForm = () => {
       return;
     }
 
-    createChapters(data, {
-      onSuccess: ({ course_id }) => {
+    mutate(data, {
+      onSuccess: (course) => {
+        console.log("Created course:", course);
+
+        if (!course?.id) {
+          toast({
+            title: "Error",
+            description: "Invalid course response",
+            variant: "destructive",
+          });
+          return;
+        }
+
         toast({
           title: "Success",
           description: "Course created successfully",
         });
-        router.push(`/create/${course_id}`);
+
+        // 🔥 Correct redirect
+        router.push(`/create/${course.id}`);
       },
       onError: (error: any) => {
         const message =
@@ -73,21 +86,29 @@ const CreateCourseForm = () => {
         });
       },
     });
-  }
+  };
 
   return (
     <div className="w-full">
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="w-full mt-4">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="w-full mt-4"
+        >
           {/* TITLE */}
           <FormField
             control={form.control}
             name="title"
             render={({ field }) => (
               <FormItem className="flex flex-col items-start w-full sm:flex-row sm:items-center">
-                <FormLabel className="flex-[1] text-xl">Title</FormLabel>
+                <FormLabel className="flex-[1] text-xl">
+                  Title
+                </FormLabel>
                 <FormControl className="flex-[6]">
-                  <Input placeholder="Enter the main topic" {...field} />
+                  <Input
+                    placeholder="Enter the main topic"
+                    {...field}
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -111,7 +132,10 @@ const CreateCourseForm = () => {
                         Unit {index + 1}
                       </FormLabel>
                       <FormControl className="flex-[6]">
-                        <Input placeholder="Enter subtopic" {...field} />
+                        <Input
+                          placeholder="Enter subtopic"
+                          {...field}
+                        />
                       </FormControl>
                     </FormItem>
                   )}
@@ -120,13 +144,16 @@ const CreateCourseForm = () => {
             ))}
           </AnimatePresence>
 
-          {/* ACTIONS */}
+          {/* ACTION BUTTONS */}
           <div className="flex justify-center mt-4">
             <Button
               type="button"
               variant="secondary"
               onClick={() =>
-                form.setValue("units", [...form.watch("units"), ""])
+                form.setValue("units", [
+                  ...form.watch("units"),
+                  "",
+                ])
               }
             >
               Add Unit <Plus className="ml-2 w-4 h-4" />
@@ -137,16 +164,24 @@ const CreateCourseForm = () => {
               variant="secondary"
               className="ml-2"
               onClick={() =>
-                form.setValue("units", form.watch("units").slice(0, -1))
+                form.setValue(
+                  "units",
+                  form.watch("units").slice(0, -1)
+                )
               }
+              disabled={form.watch("units").length <= 1}
             >
               Remove Unit <Trash className="ml-2 w-4 h-4" />
             </Button>
           </div>
 
           {/* SUBMIT */}
-          <Button disabled={isLoading} type="submit" className="w-full mt-6">
-            {isLoading ? "Creating..." : "Let’s Go!"}
+          <Button
+            disabled={isPending}
+            type="submit"
+            className="w-full mt-6"
+          >
+            {isPending ? "Creating..." : "Let’s Go!"}
           </Button>
         </form>
       </Form>

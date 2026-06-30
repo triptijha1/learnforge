@@ -15,10 +15,15 @@ type Props = {
 };
 
 const CoursePage = async ({ params }: Props) => {
-  // ✅ params is NOT a Promise
-  const [courseId, unitIndexParam, chapterIndexParam] = params.slug;
+  const slug = params.slug;
 
-  // 🔐 Auth protection
+  // Safety check
+  if (!slug || slug.length !== 3) {
+    redirect("/gallery");
+  }
+
+  const [courseId, unitIndexParam, chapterIndexParam] = slug;
+
   const session = await getAuthSession();
   if (!session?.user?.id) {
     redirect("/gallery");
@@ -27,13 +32,16 @@ const CoursePage = async ({ params }: Props) => {
   const course = await prisma.course.findFirst({
     where: {
       id: courseId,
-      userId: session.user.id, // 🔒 ownership enforced
+      userId: session.user.id,
     },
     include: {
       units: {
         include: {
           chapters: {
-            include: { questions: true },
+            include: {
+              questions: true,
+            },
+            orderBy: { createdAt: "asc" },
           },
         },
       },
@@ -44,6 +52,10 @@ const CoursePage = async ({ params }: Props) => {
 
   const unitIndex = Number(unitIndexParam);
   const chapterIndex = Number(chapterIndexParam);
+
+  if (isNaN(unitIndex) || isNaN(chapterIndex)) {
+    redirect("/gallery");
+  }
 
   const unit = course.units[unitIndex];
   if (!unit) redirect("/gallery");
@@ -64,7 +76,10 @@ const CoursePage = async ({ params }: Props) => {
 
   return (
     <div className="flex">
-      <CourseSideBar course={course} currentChapterId={chapter.id} />
+      <CourseSideBar
+        course={course}
+        currentChapterId={chapter.id}
+      />
 
       <main className="flex-1 ml-[320px] px-10 py-8 max-w-4xl">
         <MainVideoSummary
@@ -73,10 +88,12 @@ const CoursePage = async ({ params }: Props) => {
           summaryHtml={summaryHtml}
         />
 
+        {/* Quiz Section */}
         <div className="mt-12">
           <QuizCards chapter={chapter} />
         </div>
 
+        {/* Navigation */}
         <div className="flex justify-between mt-12 pt-6 border-t">
           {prevChapter ? (
             <Link

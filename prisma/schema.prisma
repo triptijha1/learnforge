@@ -44,6 +44,14 @@ model Session {
   @@index([userId])
 }
 
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -64,7 +72,7 @@ model User {
 model Course {
   id        String   @id @default(cuid())
   name      String
-  image     String
+  image     String?
   category  String?
   userId    String
 
@@ -113,7 +121,9 @@ model Question {
 
   question String @db.VarChar(3000)
   answer   String @db.VarChar(3000)
-  options  String @db.VarChar(3000)
+
+  // Store MCQ options as JSON array
+  options Json
 
   chapterId String
   chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)

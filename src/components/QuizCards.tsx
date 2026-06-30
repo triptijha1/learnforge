@@ -1,20 +1,28 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import type { Chapter, Question } from "@prisma/client";
 import React from "react";
-import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
-import { Label } from "./ui/label";
-import { Button } from "./ui/button";
+import { cn } from "@/lib/utils";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group";
 import { ChevronRight } from "lucide-react";
 
 type Props = {
   chapter: Chapter & {
-    questions: Question[];
+    questions?: Question[];
   };
 };
 
 const QuizCards = ({ chapter }: Props) => {
+  // 🔒 FULL SAFETY GUARD
+  if (!chapter?.questions?.length) {
+    return null;
+  }
+
   const [answers, setAnswers] = React.useState<Record<string, string>>({});
   const [questionState, setQuestionState] = React.useState<
     Record<string, boolean>
@@ -24,7 +32,7 @@ const QuizCards = ({ chapter }: Props) => {
   const checkAnswers = () => {
     const newState: Record<string, boolean> = {};
 
-    chapter.questions.forEach((question) => {
+    chapter.questions!.forEach((question) => {
       const userAnswer = answers[question.id];
       newState[question.id] = userAnswer === question.answer;
     });
@@ -32,10 +40,6 @@ const QuizCards = ({ chapter }: Props) => {
     setQuestionState(newState);
     setChecked(true);
   };
-
-  if (chapter.questions.length === 0) {
-    return null;
-  }
 
   return (
     <section className="mt-12 rounded-2xl border bg-card p-8">
@@ -91,7 +95,11 @@ const QuizCards = ({ chapter }: Props) => {
       </div>
 
       {!checked ? (
-        <Button className="w-full mt-6" size="lg" onClick={checkAnswers}>
+        <Button
+          className="w-full mt-6"
+          size="lg"
+          onClick={checkAnswers}
+        >
           Check Answers
           <ChevronRight className="ml-2 w-4 h-4" />
         </Button>

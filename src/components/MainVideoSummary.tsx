@@ -13,7 +13,6 @@ const MainVideoSummary = ({
 }: Props) => {
   return (
     <section className="space-y-10 flex-[2]">
-      {/* ================= VIDEO ================= */}
       {chapter.youtubeVideoId && (
         <div className="aspect-video rounded-xl overflow-hidden border">
           <iframe
@@ -24,7 +23,6 @@ const MainVideoSummary = ({
         </div>
       )}
 
-      {/* ================= CONTENT ================= */}
       <div>
         <h2 className="text-2xl font-bold mb-4">
           {chapter.name}
@@ -42,7 +40,6 @@ const MainVideoSummary = ({
         )}
       </div>
 
-      {/* ================= SUMMARY ================= */}
       {summaryHtml && (
         <div className="bg-muted/40 rounded-xl p-6">
           <h3 className="text-lg font-semibold mb-2">
