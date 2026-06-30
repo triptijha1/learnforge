@@ -1,9 +1,7 @@
-import { DefaultSession, NextAuthOptions } from "next-auth";
-import { getServerSession } from "next-auth/next";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import { DefaultSession, NextAuthOptions, getServerSession } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import { createClient } from "@supabase/supabase-js";
-
-/* -------------------- TYPES -------------------- */
+import { prisma } from "@/lib/db";
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
@@ -21,96 +19,46 @@ declare module "next-auth/jwt" {
   }
 }
 
-/* -------------------- SUPABASE SERVER CLIENT -------------------- */
-
-function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY! // server-only
-  );
-}
-
-/* -------------------- AUTH OPTIONS -------------------- */
-
 export const authOptions: NextAuthOptions = {
-  session: {
-    strategy: "jwt",
-  },
-
+  adapter: PrismaAdapter(prisma),
+  session: { strategy: "jwt" },
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
     }),
   ],
-
   callbacks: {
-    async jwt({ token, account, profile }) {
-      // Run only on sign-in
-      if (account && profile) {
-        const supabase = getSupabaseAdmin();
-        const userId = profile.sub as string;
-
-        token.id = userId;
-
-        // Fetch credits
-        const { data, error } = await supabase
-          .from("User")
-          .select("credits")
-          .eq("id", userId)
-          .single();
-
-        // If user exists and has 0 credits → give starter credits
-        if (!error && data) {
-          if (data.credits === 0) {
-            await supabase
-              .from("User")
-              .update({ credits: 10 })
-              .eq("id", userId);
-
-            token.credits = 10;
-          } else {
-            token.credits = data.credits;
-          }
-        } else {
-          // Safe fallback
-          token.credits = 0;
+    async jwt({ token }) {
+      if (token.email) {
+        const user = await prisma.user.findUnique({
+          where: { email: token.email },
+          select: { id: true, credits: true },
+        });
+        if (user) {
+          token.id = user.id;
+          token.credits = user.credits;
         }
       }
-
       return token;
     },
-
     async session({ session, token }) {
-      if (session.user && token) {
+      if (session.user) {
         session.user.id = token.id as string;
         session.user.credits = token.credits ?? 0;
       }
       return session;
     },
   },
-
-  secret: process.env.NEXTAUTH_SECRET as string,
+  secret: process.env.NEXTAUTH_SECRET,
 };
 
-/* -------------------- SERVER SESSION -------------------- */
-
-export const getAuthSession = () => {
-  return getServerSession(authOptions);
-};
-
-/* -------------------- CREDIT HELPER -------------------- */
+export const getAuthSession = () => getServerSession(authOptions);
 
 export async function getUserCredits(userId: string) {
-  const supabase = getSupabaseAdmin();
-
-  const { data, error } = await supabase
-    .from("User")
-    .select("credits")
-    .eq("id", userId)
-    .single();
-
-  if (error || !data) return 0;
-
-  return data.credits;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { credits: true },
+  });
+  return user?.credits ?? 0;
 }

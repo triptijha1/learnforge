@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
 import { getAuthSession } from "@/lib/auth";
-import { createCourseWithUnits } from "@/services/course.service";
-import { createCourseSchema } from "@/validators/course";
+import { enrichChapter } from "@/services/chapter.service";
+import { chapterInfoSchema } from "@/validators/course";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -13,10 +13,10 @@ export async function POST(req: Request) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const input = createCourseSchema.parse(await req.json());
-    const course = await createCourseWithUnits(input, session.user.id);
-    return NextResponse.json(course, { status: 201 });
+    const { chapterId } = chapterInfoSchema.parse(await req.json());
+    const chapter = await enrichChapter(chapterId, session.user.id);
+    return NextResponse.json(chapter);
   } catch (error) {
-    return apiError(error, "CREATE_COURSE_ERROR");
+    return apiError(error, "ENRICH_CHAPTER_ERROR");
   }
 }

@@ -27,6 +27,7 @@ const CreateCourseForm = () => {
     defaultValues: {
       title: "",
       units: ["", "", ""],
+      language: "EN",
     },
   });
 

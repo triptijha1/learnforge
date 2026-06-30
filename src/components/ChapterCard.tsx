@@ -16,7 +16,7 @@ type Props = {
 };
 
 export type ChapterCardHandler = {
-  triggerLoad: () => void;
+  triggerLoad: () => Promise<void>;
 };
 
 type ChapterInfoResponse = {
@@ -55,27 +55,20 @@ const ChapterCard = React.forwardRef<ChapterCardHandler, Props>(
     }, [chapter.youtubeVideoId, addChapterIdToSet]);
 
     React.useImperativeHandle(ref, () => ({
-      triggerLoad() {
+      async triggerLoad() {
         if (chapter.youtubeVideoId) {
           addChapterIdToSet();
           return;
         }
-
-        mutation.mutate(undefined, {
-          onSuccess: () => {
-            setSuccess(true);
-            addChapterIdToSet();
-          },
-          onError: () => {
-            setSuccess(false);
-            toast({
-              title: "Error",
-              description: "Failed to load chapter",
-              variant: "destructive",
-            });
-            addChapterIdToSet();
-          },
-        });
+        try {
+          await mutation.mutateAsync();
+          setSuccess(true);
+          addChapterIdToSet();
+        } catch (error) {
+          setSuccess(false);
+          toast({ title: "Error", description: "Failed to generate this chapter. You can retry.", variant: "destructive" });
+          throw error;
+        }
       },
     }));
 

@@ -9,13 +9,13 @@ import { markdownToHtml } from "@/lib/markdownToHtml";
 import { getAuthSession } from "@/lib/auth";
 
 type Props = {
-  params: {
+  params: Promise<{
     slug: string[];
-  };
+  }>;
 };
 
 const CoursePage = async ({ params }: Props) => {
-  const slug = params.slug;
+  const { slug } = await params;
 
   // Safety check
   if (!slug || slug.length !== 3) {

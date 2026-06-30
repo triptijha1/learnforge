@@ -1,44 +1,37 @@
-'use client'
-import { DropdownMenu,DropdownMenuTrigger } from './ui/dropdown-menu';
-import React from 'react'
-import { Button } from './ui/button';
-import { DropdownMenuContent } from './ui/dropdown-menu';
-import { User } from 'next-auth';
-import { DropdownMenuItem, DropdownMenuSeparator } from '@radix-ui/react-dropdown-menu';
-import { signOut } from 'next-auth/react';
-import { LogOut, User } from 'lucide-react';
-import UserAvatar from './UserAvatar';
+"use client";
 
-type Props = {
-    user: User;
-}
+import type { User } from "next-auth";
+import { signOut } from "next-auth/react";
+import { LogOut } from "lucide-react";
+import UserAvatar from "./UserAvatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
-const UserAccountNav = ({user}: Props) => {
+type Props = { user: User };
+
+export default function UserAccountNav({ user }: Props) {
   return (
     <DropdownMenu>
-        <DropdownMenuTrigger>
-            <UserAvatar user={user}/>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-            <div className='flex items-center justify-start gap-2 p-2'>
-                <div className='flex flex-col space-y-1 leading-none'>
-                    {user?.name && (<p className='font-medium'>{user.name}</p>) }
-                    {user?.email && (<p className='w-[200px] truncate text-sm text-secondary-foreground'>{user.email}</p>) }
-                </div>
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-                onSelect = {() =>{
-                    signOut()
-                }}
-                className='text-red-600 cursor-pointer'
-            >
-                Sign out
-                <LogOut className='ml-2 h-4 w-4'/>
-            </DropdownMenuItem>
-        </DropdownMenuContent>
+      <DropdownMenuTrigger>
+        <UserAvatar user={user} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <div className="flex items-center justify-start gap-2 p-2">
+          <div className="flex flex-col space-y-1 leading-none">
+            {user.name && <p className="font-medium">{user.name}</p>}
+            {user.email && <p className="w-[200px] truncate text-sm text-secondary-foreground">{user.email}</p>}
+          </div>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => signOut()} variant="destructive">
+          Sign out <LogOut className="ml-2 h-4 w-4" />
+        </DropdownMenuItem>
+      </DropdownMenuContent>
     </DropdownMenu>
-  )
-};
-
-export default UserAccountNav
+  );
+}

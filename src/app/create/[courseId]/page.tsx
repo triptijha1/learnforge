@@ -1,107 +1,35 @@
-"use client";
+import ConfirmChapters from "@/components/ConfirmChapters";
+import { getAuthSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { Info } from "lucide-react";
+import { redirect } from "next/navigation";
 
-import { cn } from "@/lib/utils";
-import React from "react";
-import type { Chapter, Question } from "@prisma/client";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { ChevronRight } from "lucide-react";
+type Props = { params: Promise<{ courseId: string }> };
 
-type Props = {
-  chapter?: Chapter & {
-    questions?: Question[];
-  };
-};
+export default async function ConfirmCoursePage({ params }: Props) {
+  const session = await getAuthSession();
+  if (!session?.user?.id) redirect("/api/auth/signin");
 
-const QuizCards = ({ chapter }: Props) => {
-  if (!chapter?.questions?.length) {
-    return null;
-  }
-
-  const [answers, setAnswers] = React.useState<Record<string, string>>({});
-  const [questionState, setQuestionState] = React.useState<
-    Record<string, boolean>
-  >({});
-  const [checked, setChecked] = React.useState(false);
-
-  const checkAnswers = () => {
-    const newState: Record<string, boolean> = {};
-
-    chapter.questions!.forEach((question: Question) => {
-      const userAnswer = answers[question.id];
-      newState[question.id] = userAnswer === question.answer;
-    });
-
-    setQuestionState(newState);
-    setChecked(true);
-  };
+  const { courseId } = await params;
+  const course = await prisma.course.findFirst({
+    where: { id: courseId, userId: session.user.id },
+    include: {
+      units: {
+        include: { chapters: { orderBy: { createdAt: "asc" } } },
+      },
+    },
+  });
+  if (!course) redirect("/create");
 
   return (
-    <section className="mt-12 rounded-2xl border bg-card p-8">
-      <h2 className="text-xl font-semibold mb-6">
-        Concept Check
-      </h2>
-
-      <div className="space-y-6">
-        {chapter.questions.map((question: Question) => {
-          const options = JSON.parse(question.options) as string[];
-          const isCorrect = questionState[question.id];
-
-          return (
-            <div
-              key={question.id}
-              className={cn(
-                "p-4 border rounded-lg transition-colors",
-                checked &&
-                  (isCorrect
-                    ? "bg-green-600/20 border-green-600"
-                    : "bg-red-600/20 border-red-600")
-              )}
-            >
-              <h3 className="font-medium">{question.question}</h3>
-
-              <RadioGroup
-                disabled={checked}
-                onValueChange={(value) =>
-                  setAnswers((prev) => ({
-                    ...prev,
-                    [question.id]: value,
-                  }))
-                }
-                className="mt-3 space-y-2"
-              >
-                {options.map((option, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <RadioGroupItem
-                      value={option}
-                      id={`${question.id}-${idx}`}
-                    />
-                    <Label htmlFor={`${question.id}-${idx}`}>
-                      {option}
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </div>
-          );
-        })}
+    <div className="flex flex-col items-start max-w-2xl px-6 mx-auto my-16">
+      <p className="text-sm uppercase text-secondary-foreground/60">Course name</p>
+      <h1 className="text-5xl font-bold">{course.name}</h1>
+      <div className="flex p-4 mt-5 bg-secondary rounded-lg">
+        <Info className="w-8 h-8 mr-3 shrink-0 text-blue-400" />
+        <p>Review the generated chapters, then generate their videos, lessons, summaries, and quizzes.</p>
       </div>
-
-      {!checked ? (
-        <Button className="w-full mt-6" size="lg" onClick={checkAnswers}>
-          Check Answers
-          <ChevronRight className="ml-2 w-4 h-4" />
-        </Button>
-      ) : (
-        <div className="mt-6 text-center text-lg font-semibold">
-          You scored{" "}
-          {Object.values(questionState).filter(Boolean).length} /{" "}
-          {chapter.questions.length}
-        </div>
-      )}
-    </section>
+      <ConfirmChapters course={course} />
+    </div>
   );
-};
-
-export default QuizCards;
+}
