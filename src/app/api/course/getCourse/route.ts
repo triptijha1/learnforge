@@ -17,15 +17,29 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { courseId } = bodySchema.parse(body);
 
-    await prisma.course.deleteMany({
+    const course = await prisma.course.findFirst({
       where: {
         id: courseId,
         userId: session.user.id,
       },
+      include: {
+        units: {
+          include: {
+            chapters: {
+              include: { questions: true },
+            },
+          },
+        },
+      },
     });
 
-    return NextResponse.json({ success: true });
+    if (!course) {
+      return new NextResponse("not found", { status: 404 });
+    }
+
+    return NextResponse.json(course);
   } catch (error) {
+    console.error("[GET_COURSE_ERROR]", error);
     return new NextResponse("invalid request", { status: 400 });
   }
 }

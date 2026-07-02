@@ -4,111 +4,36 @@ import { createChapterSchema } from "@/validators/course";
 import { getUnsplashImage } from "@/lib/unsplash";
 import { prisma } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
-import { generateWithOllama } from "@/lib/ollama";
+import { generateCourseStructure } from "@/lib/courseGeneration";
+import { uploadImageFromUrl } from "@/lib/storage";
+import { rateLimit, rateLimitHeaders } from "@/lib/rateLimit";
+import { courseQueue } from "@/lib/queue";
 
-/* -------------------- TYPES -------------------- */
-
-type OutputUnits = {
-  title: string;
-  chapters: {
-    youtube_search_query: string;
-    chapter_title: string;
-  }[];
-}[];
-
-/* -------------------- OLLAMA HELPERS -------------------- */
-
-async function generateUnits(title: string, units: string[]): Promise<OutputUnits> {
-  const prompt = `
-Return ONLY valid JSON. No text outside JSON.
-
-Create ${units.length} units for a course titled "${title}".
-
-Format:
-[
-  {
-    "title": "Unit Title",
-    "chapters": [
-      {
-        "chapter_title": "Chapter Title",
-        "youtube_search_query": "YouTube search query"
-      }
-    ]
-  }
-]
-
-Rules:
-- Use keys exactly: title, chapters, chapter_title, youtube_search_query
-- If unsure about youtube query, still return a short reasonable phrase
-`;
-
-  const raw = await generateWithOllama(prompt);
-
-  // Try normal parse
-  try {
-    return JSON.parse(raw) as OutputUnits;
-  } catch {}
-
-  // Fallback repair mode
-  try {
-    // Extract JSON array even if model added text
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (!match) throw new Error("No JSON array");
-
-    const parsed = JSON.parse(match[0]);
-
-    // 🔒 Guarantee every chapter has a youtube_search_query
-    for (const unit of parsed) {
-      for (const chapter of unit.chapters) {
-        if (!chapter.youtube_search_query || typeof chapter.youtube_search_query !== "string") {
-          // fallback safe query using chapter title
-          chapter.youtube_search_query = chapter.chapter_title;
-        }
-      }
-    }
-
-    return parsed as OutputUnits;
-  } catch (err) {
-    console.error("AI JSON repair failed:", raw);
-
-    // 🔒 Absolute fallback: build structure from units input
-    return units.map((u) => ({
-      title: u,
-      chapters: [
-        {
-          chapter_title: `${title} Introduction`,
-          youtube_search_query: `${title} introduction`,
-        },
-      ],
-    })) as OutputUnits;
-  }
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 }
-
-
-async function generateImageSearchTerm(title: string): Promise<string> {
-  const prompt = `
-Give one short Unsplash search term for a course titled "${title}".
-Return ONLY the search term text. No extra words.
-`;
-  const raw = await generateWithOllama(prompt);
-  return raw.trim();
-}
-
-/* -------------------- ROUTE -------------------- */
 
 export async function POST(req: Request) {
+  const limit = await rateLimit(req);
+  if (!limit.success) {
+    return new NextResponse("Too many requests", {
+      status: 429,
+      headers: rateLimitHeaders(limit),
+    });
+  }
+
   try {
-    // 1️⃣ Auth
     const session = await getAuthSession();
     if (!session?.user?.id) {
       return new NextResponse("unauthorized", { status: 401 });
     }
 
-    // 2️⃣ Validate body
     const body = await req.json();
     const { title, units } = createChapterSchema.parse(body);
 
-    // 3️⃣ Ensure user exists
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
     });
@@ -117,18 +42,11 @@ export async function POST(req: Request) {
       return new NextResponse("user not found", { status: 404 });
     }
 
-    // 4️⃣ AI: Generate units + chapters using Ollama
-    const output_units = await generateUnits(title, units);
+    const outputUnits = await generateCourseStructure(title, units);
+    const imageSearchTerm = title;
+    const unsplashImage = (await getUnsplashImage(imageSearchTerm)) ?? "";
 
-    // 5️⃣ AI: Generate Unsplash search term
-    const imageSearchTerm = await generateImageSearchTerm(title);
-
-    const courseImage =
-      (await getUnsplashImage(imageSearchTerm)) ?? "";
-
-    // 6️⃣ ATOMIC TRANSACTION
     const course = await prisma.$transaction(async (tx) => {
-      // Credit check + decrement
       const updatedUser = await tx.user.updateMany({
         where: {
           id: user.id,
@@ -143,17 +61,15 @@ export async function POST(req: Request) {
         throw new Error("NO_CREDITS");
       }
 
-      // Create course
       const createdCourse = await tx.course.create({
         data: {
           name: title,
-          image: courseImage,
+          image: unsplashImage,
           userId: user.id,
         },
       });
 
-      // Create units & chapters
-      for (const unit of output_units) {
+      for (const unit of outputUnits) {
         const prismaUnit = await tx.unit.create({
           data: {
             name: unit.title,
@@ -173,9 +89,46 @@ export async function POST(req: Request) {
       return createdCourse;
     });
 
-    // 7️⃣ Success
-    return NextResponse.json({ course_id: course.id });
+    if (unsplashImage && process.env.AWS_S3_BUCKET_NAME) {
+      try {
+        const filename = slugify(title) || course.id;
+        const key = `courses/${course.id}/${filename}.jpg`;
+        const uploadedUrl = await uploadImageFromUrl(unsplashImage, key);
+        await prisma.course.update({
+          where: { id: course.id },
+          data: { image: uploadedUrl },
+        });
+      } catch (err) {
+        console.warn("Course image upload failed:", err);
+      }
+    }
 
+    const chapters = await prisma.chapter.findMany({
+      where: { unit: { courseId: course.id } },
+      select: { id: true },
+    });
+
+    await Promise.all(
+      chapters.map((chapter) =>
+        courseQueue.add(
+          "generate-chapter",
+          {
+            chapterId: chapter.id,
+            language: "EN",
+          },
+          {
+            removeOnComplete: true,
+            attempts: 3,
+            backoff: {
+              type: "exponential",
+              delay: 1000,
+            },
+          }
+        )
+      )
+    );
+
+    return NextResponse.json({ course_id: course.id });
   } catch (error) {
     if (error instanceof ZodError) {
       return new NextResponse("invalid body", { status: 400 });
@@ -183,10 +136,6 @@ export async function POST(req: Request) {
 
     if (error instanceof Error && error.message === "NO_CREDITS") {
       return new NextResponse("no credits", { status: 402 });
-    }
-
-    if (error instanceof Error && error.message === "INVALID_AI_OUTPUT") {
-      return new NextResponse("ai output parse error", { status: 500 });
     }
 
     console.error("[CREATE_CHAPTERS_ERROR]", error);

@@ -9,17 +9,14 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    // 1️⃣ Auth
     const session = await getAuthSession();
     if (!session?.user?.id) {
       return new NextResponse("unauthorized", { status: 401 });
     }
 
-    // 2️⃣ Validate body
     const body = await req.json();
     const { chapterId } = bodySchema.parse(body);
 
-    // 3️⃣ Fetch chapter WITH ownership check
     const chapter = await prisma.chapter.findFirst({
       where: {
         id: chapterId,
@@ -29,22 +26,25 @@ export async function POST(req: Request) {
           },
         },
       },
+      include: {
+        questions: true,
+      },
     });
 
     if (!chapter) {
-      return NextResponse.json(
-        { error: "Chapter not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Chapter not found" }, { status: 404 });
     }
 
-    // 4️⃣ Success
-    return NextResponse.json(chapter);
-
+    return NextResponse.json({
+      id: chapter.id,
+      name: chapter.name,
+      youtubeVideoId: chapter.youtubeVideoId,
+      videoLanguage: chapter.videoLanguage,
+      content: chapter.contentMarkdown ?? "",
+      summary: chapter.summaryMarkdown ?? "",
+      questions: chapter.questions,
+    });
   } catch (err) {
-    return NextResponse.json(
-      { error: "Invalid request" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 }
