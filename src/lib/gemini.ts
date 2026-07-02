@@ -1,7 +1,11 @@
 import axios from "axios";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "models/gemini-1.5-pro";
+// Access environment in a way that avoids TypeScript errors when Node types aren't available
+const processEnv: { [key: string]: string | undefined } =
+  typeof process !== "undefined" && (process as any).env ? (process as any).env : (globalThis as any).process?.env || {};
+
+const GEMINI_API_KEY = processEnv.GEMINI_API_KEY;
+const GEMINI_MODEL = processEnv.GEMINI_MODEL || "models/gemini-1.5-pro";
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta2/${GEMINI_MODEL}:generate`;
 
 if (!GEMINI_API_KEY) {
@@ -46,7 +50,7 @@ function safeJsonParse<T>(value: string): T {
   try {
     return JSON.parse(trimmed);
   } catch (firstError) {
-    const match = trimmed.match(/(\[.*\]|\{.*\})/s);
+    const match = trimmed.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
     if (match) {
       try {
         return JSON.parse(match[0]);

@@ -29,6 +29,12 @@ export const courseWorker = new Worker(
       `${chapter.youtubeSearchQuery} ${language === "HI" ? "Hindi" : "English"}`,
       language
     );
+    const resolvedYoutubeVideoId =
+      typeof youtubeVideoId === "string"
+        ? youtubeVideoId
+        : (youtubeVideoId as Partial<{ videoId?: string; id?: string }> | null)?.videoId ??
+          (youtubeVideoId as Partial<{ videoId?: string; id?: string }> | null)?.id ??
+          null;
 
     const [contentMarkdown, summaryMarkdown, mcqs] = await Promise.all([
       generateChapterDetails(
@@ -36,25 +42,25 @@ export const courseWorker = new Worker(
         chapter.youtubeSearchQuery,
         language,
         "content",
-        youtubeVideoId ?? undefined
+        resolvedYoutubeVideoId ?? undefined
       ),
       generateChapterDetails(
         chapter.name,
         chapter.youtubeSearchQuery,
         language,
         "summary",
-        youtubeVideoId ?? undefined
+        resolvedYoutubeVideoId ?? undefined
       ),
       generateChapterDetails(
         chapter.name,
         chapter.youtubeSearchQuery,
         language,
         "questions",
-        youtubeVideoId ?? undefined
+        resolvedYoutubeVideoId ?? undefined
       ),
     ]);
 
-    if (mcqs.length > 0) {
+    if (Array.isArray(mcqs) && mcqs.length > 0) {
       await prisma.question.deleteMany({ where: { chapterId } });
       await prisma.question.createMany({
         data: mcqs.map((q: { question: string; answer: string; options: string[] }) => ({
@@ -71,7 +77,7 @@ export const courseWorker = new Worker(
       data: {
         contentMarkdown: typeof contentMarkdown === "string" ? contentMarkdown : "",
         summaryMarkdown: typeof summaryMarkdown === "string" ? summaryMarkdown : "",
-        youtubeVideoId,
+        youtubeVideoId: resolvedYoutubeVideoId ?? null,
         videoLanguage: language,
       },
     });
@@ -81,6 +87,6 @@ export const courseWorker = new Worker(
   { connection }
 );
 
-courseWorker.on("failed", (job, err) => {
-  console.error(`Course generation job failed for ${job.id}:`, err);
+courseWorker.on("failed", (job: Job | undefined, err) => {
+  console.error(`Course generation job failed for ${job?.id}:`, err);
 });

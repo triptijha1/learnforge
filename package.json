@@ -25,9 +25,11 @@
     "@supabase/supabase-js": "^2.94.0",
     "@tanstack/react-query": "^5.90.3",
     "axios": "^1.12.2",
+    "bullmq": "^5.79.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.24",
+    "ioredis": "^5.10.1",
     "lucide-react": "^0.545.0",
     "next": "15.5.4",
     "next-auth": "^4.24.14",
@@ -58,5 +60,8 @@
   },
   "prisma": {
     "seed": "node prisma/seed.js"
+  },
+  "overrides": {
+    "ioredis": "^5.10.1"
   }
 }

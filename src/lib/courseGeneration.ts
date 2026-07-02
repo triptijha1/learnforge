@@ -1,5 +1,5 @@
 import { generateJson, generateText, generateStructuredText } from "./gemini";
-import { fetchYoutubeTranscript } from "./youtube";
+import { getYoutubeTranscript } from "./youtube";
 
 const promptEscaped = (value: string) => value.replace(/"/g, "\\\"");
 
@@ -50,7 +50,8 @@ function buildTranscriptHint(transcript?: string) {
 async function getTranscriptSnippet(videoId?: string): Promise<string | null> {
   if (!videoId) return null;
   try {
-    return await fetchYoutubeTranscript(videoId);
+    const transcript = await getYoutubeTranscript(videoId);
+    return transcript ?? null;
   } catch (error) {
     console.warn("Transcript fetch failed for", videoId, error);
     return null;
